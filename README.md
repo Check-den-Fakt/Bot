@@ -1,4 +1,4 @@
-﻿# Bot
+# Bot
 
 Bot Framework v4 empty bot sample.
 
