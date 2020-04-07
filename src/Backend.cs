@@ -9,20 +9,26 @@ using System.Threading.Tasks;
 
 namespace Bot
 {
-    public static class Backend
+    public class Backend
     {
-        private static RestSharp.RestClient client;
-        private static QnAMakerRuntimeClient qnAMakerClient;
+        private RestSharp.RestClient client;
+        private QnAMakerRuntimeClient qnAMakerClient;
+        private readonly IConfiguration configuration;
 
-        public static async Task<Models.FakeAPIResponse> GetFakeNews(string message)
+        public Backend(IConfiguration configuration)
         {
-            message = message.Replace("/check", "");
+            this.configuration = configuration;
+        }
+
+        public async Task<List<Models.SearchResponse>> GetFakeNewsDb(string message)
+        {
             try
             {
-                client = new RestSharp.RestClient("https://prod-56.westeurope.logic.azure.com");
+                client = new RestSharp.RestClient(configuration.GetValue<string>("ApimBaseUrl"));
 
-                RestSharp.RestRequest restRequest = new RestSharp.RestRequest("/workflows/73896dc86d9149058d3bd5234fb4ae86/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=MmoB-9jJt1DbB25AfNJis889rx8b9LbJDX0zJSCsmoM", RestSharp.Method.POST);
+                RestSharp.RestRequest restRequest = new RestSharp.RestRequest("/we-factsearch-fa/Search", RestSharp.Method.POST);
 
+                restRequest.AddHeader("Ocp-Apim-Subscription-Key", configuration.GetValue<string>("ApimKey"));
                 restRequest.AddHeader("Content-Type", "application/json");
 
                 bool result = Uri.TryCreate(message, UriKind.Absolute, out Uri uriResult)
@@ -33,16 +39,14 @@ namespace Bot
                 {
                     requestObject = new Models.Request
                     {
-                        url = message,
-                        text = string.Empty
+                        url = message
                     };
                 }
                 else
                 {
                     requestObject = new Models.Request
                     {
-                        text = message,
-                        url = string.Empty
+                        text = message
                     };
                 }
 
@@ -50,7 +54,7 @@ namespace Bot
 
                 var response = await client.ExecuteAsync(restRequest).ConfigureAwait(false);
 
-                return JsonConvert.DeserializeObject<Models.FakeAPIResponse>(response.Content);
+                return JsonConvert.DeserializeObject<List<Models.SearchResponse>>(response.Content);
             }
             catch (Exception ex)
             {
@@ -59,7 +63,7 @@ namespace Bot
             }
         }
 
-        public static async Task<IList<QnASearchResult>> GetQnAResponse(string question, IConfiguration configuration)
+        public async Task<IList<QnASearchResult>> GetQnAResponse(string question)
         {
             var subscriptionKey = configuration["QnAMakerAPIKey"];
             qnAMakerClient = new QnAMakerRuntimeClient(new EndpointKeyServiceClientCredentials(subscriptionKey)) { RuntimeEndpoint = configuration["QnAMakerEndpoint"] };
@@ -69,11 +73,12 @@ namespace Bot
             return result.Answers;
         }
 
-        public static async Task ReportMessage(Models.ReportDetails details, IConfiguration configuration)
+        public async Task ReportMessage(Models.ReportDetails details)
         {
-            client = new RestSharp.RestClient("https://we-sendfact-fa.azurewebsites.net");
-            RestSharp.RestRequest restRequest = new RestSharp.RestRequest("/api/messagearchive", RestSharp.Method.POST);
+            client = new RestSharp.RestClient(configuration.GetValue<string>("ApimBaseUrl"));
+            RestSharp.RestRequest restRequest = new RestSharp.RestRequest("we-fakenews-func/Insert", RestSharp.Method.POST);
 
+            restRequest.AddHeader("Ocp-Apim-Subscription-Key", configuration.GetValue<string>("ApimKey"));
             restRequest.AddHeader("Content-Type", "application/json");
             restRequest.AddJsonBody(details);
 
