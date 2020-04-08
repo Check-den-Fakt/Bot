@@ -101,7 +101,7 @@ namespace Bot.Dialogs
                     break;
 
                 case ChatIntents.Intent.FAQ:
-                    
+
                     var qnaDetails = new Models.QnADetails()
                     {
                     };
@@ -134,22 +134,38 @@ namespace Bot.Dialogs
                 };
                 await stepContext.Context.SendActivityAsync(typing).ConfigureAwait(false);
 
+                bool isUrl = Uri.TryCreate(result.Question.ToLowerInvariant(), UriKind.Absolute, out Uri uriResult);
+
+                string questionText = result.Question.ToLowerInvariant();
                 backend = new Backend(configuration);
-                var reply = await backend.GetFakeNewsDb(result.Question.ToLowerInvariant()).ConfigureAwait(false);
+                Models.TrustedPublisher publisher;
 
-                //string keyPhrasesString = Regex.Unescape(reply.);
-                //var keyPhrases = JsonConvert.DeserializeObject<Models.KeyPhrase>(keyPhrasesString);
+                if (isUrl)
+                {
+                    // Trusted Publisher
+                    publisher = await backend.GetTrustedPublisher(questionText);
+                    string publisherMessageText = string.Empty;
 
+                    if (publisher != null)
+                    {
+                        publisherMessageText = $"Die Überprüfung des Publishers hat folgendes ergeben\nDer Publisher ist zu {Math.Round(publisher.TrustScore * 100)}% vertrauenswürdig.\n\nBegründung:\n{publisher.Reason}";
+                    }
+                    else
+                    {
+                        publisherMessageText = "Der Publisher konnte leider nicht validiert werden";
+                    }
+
+                    var publisherMessage = MessageFactory.Text(publisherMessageText, publisherMessageText, InputHints.IgnoringInput);
+                    await stepContext.Context.SendActivityAsync(publisherMessage, cancellationToken).ConfigureAwait(false);
+                    
+                    await stepContext.Context.SendActivityAsync(typing).ConfigureAwait(false);
+
+                    var responseObject = await backend.GetWebScraperResult(questionText).ConfigureAwait(false);
+                    questionText = responseObject.Text;
+                }
+
+                var reply = await backend.GetFakeNewsDb(questionText).ConfigureAwait(false);
                 StringBuilder stringBuilder = new StringBuilder();
-                //stringBuilder.AppendLine("Wir haben folgendes in unser Datenbank gefunden:");
-                //stringBuilder.AppendLine("Folgende Keywörter :");
-
-                //foreach (var item in keyPhrases.InternalHitCount)
-                //{
-                //    stringBuilder.AppendLine($"{item.Key} mit einer Häufigkeit von {item.Value}");
-                //}
-
-                //stringBuilder.AppendLine("");
                 stringBuilder.AppendLine("In unserer Fake Datenbank haben wir folgendes Ergebnis gefunden:");
 
                 double searchScore = 0;
@@ -167,6 +183,7 @@ namespace Bot.Dialogs
                 var message = MessageFactory.Text(messageText, messageText, InputHints.IgnoringInput);
                 await stepContext.Context.SendActivityAsync(message, cancellationToken).ConfigureAwait(false);
             }
+
 
             if (stepContext.Result is Models.QnADetails qnaResult)
             {
@@ -189,9 +206,9 @@ namespace Bot.Dialogs
                     }
                 }
 
-                if(qnaMessage == "Ich habe folgende Ergebnisse in unserer FAQ gefunden:\n")
+                if (qnaMessage == "Ich habe folgende Ergebnisse in unserer FAQ gefunden:\n")
                 {
-                    qnaMessage += "Tut mir leid, ich habe leider nichts gefunden :(";
+                    qnaMessage = "Tut mir leid, ich habe leider nichts gefunden :(";
                 }
 
 
@@ -202,7 +219,7 @@ namespace Bot.Dialogs
             if (stepContext.Result is Models.ReportDetails reportDetails)
             {
                 string reportMessage = "Vielen Dank für deine Meldung";
-                
+
                 await stepContext.Context.SendActivityAsync(MessageFactory.Text("Einen Moment bitte")).ConfigureAwait(false);
 
                 Activity typing = new Activity

@@ -1,4 +1,5 @@
-﻿using Microsoft.Azure.CognitiveServices.Knowledge.QnAMaker;
+﻿using Bot.Models;
+using Microsoft.Azure.CognitiveServices.Knowledge.QnAMaker;
 using Microsoft.Azure.CognitiveServices.Knowledge.QnAMaker.Models;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
@@ -31,24 +32,10 @@ namespace Bot
                 restRequest.AddHeader("Ocp-Apim-Subscription-Key", configuration.GetValue<string>("ApimKey"));
                 restRequest.AddHeader("Content-Type", "application/json");
 
-                bool result = Uri.TryCreate(message, UriKind.Absolute, out Uri uriResult)
-                    && uriResult.Scheme == Uri.UriSchemeHttp;
-
-                Models.Request requestObject;
-                if (result)
+                Models.Request requestObject = new Models.Request
                 {
-                    requestObject = new Models.Request
-                    {
-                        url = message
-                    };
-                }
-                else
-                {
-                    requestObject = new Models.Request
-                    {
-                        text = message
-                    };
-                }
+                    text = message
+                };
 
                 restRequest.AddJsonBody(requestObject);
 
@@ -59,6 +46,60 @@ namespace Bot
             catch (Exception ex)
             {
 
+                throw;
+            }
+        }
+
+        public async Task<TrustedPublisher> GetTrustedPublisher(string url)
+        {
+            client = new RestSharp.RestClient(configuration.GetValue<string>("ApimBaseUrl"));
+            RestSharp.RestRequest restRequest = new RestSharp.RestRequest("/we-trustedpublisher-func/GetTrustedPublisher", RestSharp.Method.POST);
+
+            restRequest.AddHeader("Ocp-Apim-Subscription-Key", configuration.GetValue<string>("ApimKey"));
+            restRequest.AddHeader("Content-Type", "application/json");
+
+            TrustedPublisherRequest publisherRequest = new TrustedPublisherRequest()
+            {
+                Url = url
+            };
+
+            restRequest.AddJsonBody(publisherRequest);
+
+            try
+            {
+                var response = await client.ExecuteAsync(restRequest).ConfigureAwait(false);
+
+                return JsonConvert.DeserializeObject<TrustedPublisher>(response.Content);
+            }
+            catch (Exception)
+            {
+                return new TrustedPublisher() { Reason = "Konnte leider nicht validiert werden" };
+            }
+        }
+
+        public async Task<ScraperResponse> GetWebScraperResult(string url)
+        {
+            client = new RestSharp.RestClient(configuration.GetValue<string>("ApimBaseUrl"));
+            RestSharp.RestRequest restRequest = new RestSharp.RestRequest("/we-webscraper-func/WebScraperFunc", RestSharp.Method.POST);
+
+            restRequest.AddHeader("Ocp-Apim-Subscription-Key", configuration.GetValue<string>("ApimKey"));
+            restRequest.AddHeader("Content-Type", "application/json");
+
+            ScraperRequest requestObject = new ScraperRequest()
+            {
+                url = url
+            };
+
+            restRequest.AddJsonBody(requestObject);
+
+            try
+            {
+                var response = await client.ExecuteAsync(restRequest).ConfigureAwait(false);
+
+                return JsonConvert.DeserializeObject<ScraperResponse>(response.Content);
+            }
+            catch (Exception)
+            {
                 throw;
             }
         }
